@@ -45,7 +45,7 @@ jobs:
       - name: Respaldo
         run: |
           sudo ./scripts/backup.sh
-          ls -l backups/
+          sudo ls -l backups/
       - name: Logs
         if: failure()
         run: docker compose logs
