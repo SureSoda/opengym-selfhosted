@@ -57,7 +57,7 @@ con un registro `A` apuntando a la IP del VPS.
 
 ```bash
 ssh root@IP_DEL_VPS
-git clone https://github.com/<tu-usuario>/<este-repo>.git opengym && cd opengym
+git clone https://github.com/SureSoda/opengym-selfhosted.git opengym && cd opengym
 cp .env.example .env && nano .env      # completar DOMAIN y ACME_EMAIL
 sudo ./scripts/setup-vps.sh
 ```
