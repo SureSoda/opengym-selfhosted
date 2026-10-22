@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck scripts/*.sh
+      - name: docker compose config
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - name: caddy validate
+        run: |
+          docker run --rm -e DOMAIN=gym.example.com -e ACME_EMAIL=you@example.com \
+            -v "$PWD/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.11-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+  # Levanta el stack completo con DOMAIN=localhost (Caddy usa su CA interna) y comprueba que
+  # la PWA y la API respondan a través de HTTPS.
+  smoke:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Levantar stack
+        run: |
+          cp .env.example .env
+          sed -i 's/^DOMAIN=.*/DOMAIN=localhost/' .env
+          docker compose up -d --wait --wait-timeout 120
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsk https://localhost/api/health && break
+            sleep 2
+          done
+          curl -fsk https://localhost/api/health
+          curl -fsk https://localhost/ | grep -qi '<html'
+      - name: Respaldo
+        run: |
+          sudo ./scripts/backup.sh
+          ls -l backups/
+      - name: Logs
+        if: failure()
+        run: docker compose logs

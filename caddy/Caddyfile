@@ -1,0 +1,18 @@
+{
+	# Let's Encrypt avisa a este correo si un certificado no se puede renovar.
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		# Solo HTTPS a partir de la primera visita (las passkeys lo exigen igual).
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Sin límite de tamaño ni cabeceras CORS propias: openGym ya manda las suyas, y una
+	# segunda Access-Control-Allow-Origin hace que el navegador rechace la respuesta.
+	reverse_proxy web:80
+}

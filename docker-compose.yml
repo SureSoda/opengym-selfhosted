@@ -1,0 +1,88 @@
+# openGym en un VPS: Caddy (HTTPS automático) -> web (nginx + PWA) -> api (Node + JSON en ./data)
+#
+# Solo Caddy publica puertos. web y api quedan en una red interna, así nadie puede saltarse
+# el HTTPS ni falsificar la IP de origen hablando directo con nginx.
+
+name: opengym
+
+# Las imágenes traen un healthcheck cada 5 min; acá se reduce el primero a unos segundos para
+# que cada servicio arranque recién cuando el anterior responde.
+x-healthcheck-timing: &healthcheck-timing
+  interval: 5m
+  timeout: 5s
+  retries: 3
+  start_period: 60s
+  start_interval: 2s
+
+services:
+  caddy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      - DOMAIN=${DOMAIN:?Falta DOMAIN en .env}
+      - ACME_EMAIL=${ACME_EMAIL:?Falta ACME_EMAIL en .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # certificados de Let's Encrypt
+      - caddy_config:/config
+    networks:
+      - edge
+
+  web:
+    image: ghcr.io/duartesantos8/opengym-web:1.4.1
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      - BACKEND=api
+      - PORT=3000
+      # Caddy reemplaza X-Forwarded-For con la IP real del cliente (no confía en la que manda
+      # el navegador). nginx la reenvía como CF-Connecting-IP, que es la primera cabecera que
+      # lee la API, así el rate-limit y el log de actividad ven al visitante y no a Caddy.
+      - CF_CONNECTING_IP=$$http_x_forwarded_for
+      - MEDIA_UPLOAD_MAX=${MEDIA_UPLOAD_MAX:-48m}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:80/ || exit 1"]
+      <<: *healthcheck-timing
+    networks:
+      - edge
+      - internal
+
+  api:
+    image: ghcr.io/duartesantos8/opengym-api:1.4.1
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Las passkeys quedan atadas a este dominio exacto: se derivan de DOMAIN para que no
+      # puedan quedar desalineadas.
+      - RP_ID=${DOMAIN}
+      - ORIGIN=https://${DOMAIN}
+      - PORT=3000
+      - DATA_DIR=/data
+      - TRUST_PROXY=1
+    volumes:
+      - ./data:/data   # usuarios, passkeys, entrenamientos, uploads. Esto es lo que se respalda.
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/api/health || exit 1"]
+      <<: *healthcheck-timing
+    networks:
+      - internal
+
+# Caddy solo ve a web, y solo web ve a la API. La red `internal` no lleva `internal: true`
+# porque la API necesita salir a internet para enviar notificaciones push (y para el AI coach
+# o el import de Hevy, si se activan).
+networks:
+  edge:
+  internal:
+
+volumes:
+  caddy_data:
+  caddy_config:

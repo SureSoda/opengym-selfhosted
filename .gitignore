@@ -1,0 +1,5 @@
+# Datos y secretos de la instancia: nunca al repo
+.env
+data/
+data.antes-de-restaurar-*/
+backups/
