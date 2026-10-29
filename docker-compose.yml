@@ -36,7 +36,7 @@ services:
       - edge
 
   web:
-    image: ghcr.io/duartesantos8/opengym-web:1.4.1
+    image: ghcr.io/duartesantos8/opengym-web:1.4.3
     restart: unless-stopped
     depends_on:
       api:
