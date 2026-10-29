@@ -57,7 +57,7 @@ services:
       - internal
 
   api:
-    image: ghcr.io/duartesantos8/opengym-api:1.4.1
+    image: ghcr.io/duartesantos8/opengym-api:1.4.3
     restart: unless-stopped
     env_file: .env
     environment:
